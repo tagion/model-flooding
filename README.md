@@ -1,2 +1,4 @@
-# tagion_flooding
-Tagion flooding model
+# Tagion flooding model
+
+To compile the program write
+```make all```
