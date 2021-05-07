@@ -123,7 +123,7 @@ int main(string[] args) {
     auto rnd = Random(unpredictableSeed);
 
 
-    const samples=5;
+    const samples=10;
     foreach(round;0..samples) {
         Selector.Node active_node;
         Selector.Node passive_node;
