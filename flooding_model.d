@@ -2,6 +2,7 @@
 import std.math;
 import std.random;
 import std.stdio;
+import std.algorithm.iteration : filter, each;
 
 @safe
 struct FermiDirac {
@@ -13,7 +14,6 @@ struct FermiDirac {
 }
 
 
-
 @safe
 class Selector {
     private {
@@ -23,6 +23,7 @@ class Selector {
     }
     class Node {
         immutable size_t id;
+        bool evil;
         private {
             uint _points;
             uint _bucket_no;
@@ -67,15 +68,20 @@ class Selector {
                 }
 
             }
+
+            uint bucket_no() const{
+                return _bucket_no;
+            }
         }
     }
 
     uint select_no;
-    Selector opCall(const uint points) pure {
-        new Node(select_no, points);
-        return this;
+    Node opCall(const uint points) pure {
+        return new Node(select_no, points);
     }
-
+    const(Node[]) opSlice() const pure nothrow {
+        return _nodes;
+    } 
     pure nothrow {
         uint total_points() const {
             return _total_points[select_no];
@@ -97,60 +103,93 @@ class Selector {
             }
             assert(0);
         }
+        uint count_evil(const uint no) const {
+        uint result;
+        _nodes
+        .filter!(a => (a.bucket_no==no && a.evil))
+        .each!(a => result++);
+        return result;
+        }
+        uint count(const uint no) const {
+        uint result;
+        _nodes
+        .filter!(a => (a.bucket_no==no ))
+        .each!(a => result++);
+        return result;
+        }
     }
 }
-
 
 int main(string[] args) {
     auto selector=new Selector;
 
+// Write to csv
+auto f = File("test.csv", "w"); 
+scope(exit) {
+f.close;
+}
 
     // Bucket 0 // Active nodes
-    selector(10)(12)(11)(9)(1)(17);
+    foreach(i;0..750) {
+        selector(40);
+    }
     // Bucket 1 // Nodes passive
     selector.select_no=1;
-    foreach(i;0..10) {
-        selector(10+i);
+    foreach(i;0..1000) {
+        selector(40);
     }
-
-
-
-
+    //Defines evil nodes in passive
+    foreach(i;0..3250) {
+        selector(1).evil=true;
+    }
 
 
     // writefln("total_points=%d", selector.total_points);
 
     auto rnd = Random(unpredictableSeed);
 
-
-    const samples=10;
+    const samples=100000;
+    
     foreach(round;0..samples) {
         Selector.Node active_node;
         Selector.Node passive_node;
+        
         writefln("\n\nRound %d", round);
 
-        { // Select active node
+        { // Select active node - //Lets change to random between node id instead of based on points
             selector.select_no=0; // Active node bucket
-            writefln("Total active %d", selector.total_points);
+            writefln("Total active points %d", selector.total_points);
             const select_point=uniform(0, selector.total_points, rnd);
             writefln("\tpoint %d", select_point);
-
             active_node=selector.select(select_point);
         }
+
         { // Select passive node
             selector.select_no=1; // Passive node bucket
-            writefln("Total passive %d", selector.total_points);
+            writefln("Total passive points %d", selector.total_points);
             const select_point=uniform(0, selector.total_points, rnd);
             writefln("\tpoint %d", select_point);
             passive_node=selector.select(select_point);
+           
         }
         active_node.move(1); // Move active_node to passive node bucket
         passive_node.move(0); // Move passive_node to active node bucket
-        //passive_node.points=17;
-        writefln("\tMove node %d to passive", active_node.id);
-        writefln("\tMove node %d to active", passive_node.id);
-    //     //    writefln(""
-    }
+        writefln("Move node %d to passive", active_node.id);
+        writefln("Move node %d to active", passive_node.id);
 
-    return 0;
+        // Evil nodes in active 
+        writefln("count evil nodes in active=%d", selector.count_evil(0));
+
+        // Evil nodes in passive
+        writefln("count evil nodes in passive=%d", selector.count_evil(1));
+        
+        // print to csv file 
+        f.writefln("%d, %d, %d,", round, selector.count_evil(0), selector.count(0));
+    
+    }
+     
+    
+
+return 0;
 }
+
