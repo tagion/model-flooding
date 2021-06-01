@@ -20,6 +20,7 @@ class Selector {
         uint node_id;
         uint[uint] _total_points;
         Node[] _nodes;
+        int _round_no;
     }
     class Node {
         immutable size_t id;
@@ -27,6 +28,7 @@ class Selector {
         private {
             uint _points;
             uint _bucket_no;
+            int _round_no;
         }
         this(const uint bucket_no, const uint v) pure {
             _bucket_no=bucket_no;
@@ -65,6 +67,7 @@ class Selector {
                     }
                     _total_points[to_bucket_no]+=_points;
                     _total_points[_bucket_no]-=_points;
+                    _round_no = this.outer._round_no;
                 }
 
             }
@@ -72,6 +75,11 @@ class Selector {
             uint bucket_no() const{
                 return _bucket_no;
             }
+
+            int round_no() const{
+                return _round_no;
+            }
+
         }
     }
 
@@ -81,8 +89,11 @@ class Selector {
     }
     const(Node[]) opSlice() const pure nothrow {
         return _nodes;
-    } 
+    }
     pure nothrow {
+        void next_round() {
+            _round_no++;
+        }
         uint total_points() const {
             return _total_points[select_no];
         }
@@ -104,19 +115,24 @@ class Selector {
             assert(0);
         }
         uint count_evil(const uint no) const {
-        uint result;
-        _nodes
-        .filter!(a => (a.bucket_no==no && a.evil))
-        .each!(a => result++);
-        return result;
+            uint result;
+            _nodes
+                .filter!(a => (a.bucket_no==no && a.evil))
+                .each!(a => result++);
+            return result;
         }
         uint count(const uint no) const {
-        uint result;
-        _nodes
-        .filter!(a => (a.bucket_no==no ))
-        .each!(a => result++);
-        return result;
+            uint result;
+            _nodes
+                .filter!(a => (a.bucket_no==no ))
+                .each!(a => result++);
+            return result;
         }
+
+        uint round_no() const{
+            return _round_no;
+        }
+
     }
 }
 
@@ -124,10 +140,10 @@ int main(string[] args) {
     auto selector=new Selector;
 
 // Write to csv
-auto f = File("test.csv", "w"); 
-scope(exit) {
-f.close;
-}
+    auto f = File("test.csv", "w");
+    scope(exit) {
+        f.close;
+    }
 
     // Bucket 0 // Active nodes
     foreach(i;0..750) {
@@ -149,12 +165,14 @@ f.close;
     auto rnd = Random(unpredictableSeed);
 
     const samples=100000;
-    
+
     foreach(round;0..samples) {
         Selector.Node active_node;
         Selector.Node passive_node;
-        
-        writefln("\n\nRound %d", round);
+        scope(exit) {
+            selector.next_round;
+        }
+        writefln("\n\nRound %d", selector.round_no);
 
         { // Select active node - //Lets change to random between node id instead of based on points
             selector.select_no=0; // Active node bucket
@@ -170,26 +188,28 @@ f.close;
             const select_point=uniform(0, selector.total_points, rnd);
             writefln("\tpoint %d", select_point);
             passive_node=selector.select(select_point);
-           
+
         }
+        writefln("Number of round active %d", selector.round_no - active_node.round_no);
+        writefln("Number of round passive %d", selector.round_no - passive_node.round_no);
+
         active_node.move(1); // Move active_node to passive node bucket
         passive_node.move(0); // Move passive_node to active node bucket
         writefln("Move node %d to passive", active_node.id);
         writefln("Move node %d to active", passive_node.id);
 
-        // Evil nodes in active 
+        // Evil nodes in active
         writefln("count evil nodes in active=%d", selector.count_evil(0));
 
         // Evil nodes in passive
         writefln("count evil nodes in passive=%d", selector.count_evil(1));
-        
-        // print to csv file 
+
+        // print to csv file
         f.writefln("%d, %d, %d,", round, selector.count_evil(0), selector.count(0));
-    
+
     }
-     
-    
 
-return 0;
+
+
+    return 0;
 }
-
